@@ -1,15 +1,45 @@
-# Byte-compiled / optimized / DLL files
+# MicroPython & Raspberry Pi Pico Specifics
+# ==========================================
+# Compiled MicroPython byte-code files
+*.mpy
+
+# Firmware, bootloader, and raw flash dumps
+*.uf2
+*.hex
+*.bin
+
+# MicroPython IDE stubs & typings (for PyCharm auto-completion)
+.stubs/
+typings/
+/micropython-stubs/
+
+# Serial connection / deployment logs
+*.log
+
+# PyCharm / JetBrains IDE
+# ==========================================
+.idea/
+*.iml
+
+# Python Standard & Host Environment
+# ==========================================
 __pycache__/
 *.py[codz]
 *$py.class
 
-# PyCharm project-level files and directories
-.idea/
-*.iml
-
-# Virtual environment
+# Host virtual environments (for pytest, stubs, mpremote)
+.venv/
 venv/
 env/
+ENV/
+
+# Environment secrets and local variables
+.env
+.envrc
+
+# OS files
+.DS_Store
+Thumbs.db
 
 # C extensions
 *.so
