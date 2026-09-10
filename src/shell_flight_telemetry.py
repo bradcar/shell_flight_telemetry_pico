@@ -77,6 +77,11 @@ Input:
 Output:
     *** CAUTION: The created CSV IS CONVERTED TO SECONDS by unpack_bin_sensor_logs.py
     Seconds, lin_acc_x, lin_acc_y, lin_acc_z, quat_r, quat_i, quat_j, quat_k, gyro_y, gyro_p, gyro_r, hpa
+
+    Hawthorne Nevada
+    Hawthorne Industrial Airport, NV (ASOS/AWOS - REV)
+    Station Elev: 4230.0 ft; Lat/Lon: 38.54482/-118.63137
+    https://www.weather.gov/wrh/timeseries?site=KHTH
 """
 import binascii  # For fast CRC32
 import gc
@@ -93,7 +98,7 @@ from lib.micropython_bmpxxx import bmpxxx
 from lib.spi import BNO08X_SPI
 from utime import sleep_ms, ticks_ms, ticks_diff
 
-import flight_log_config as config
+from lib import flight_log_config as config
 
 # ==== PIN DEFINITIONS ====
 # Internal pins
@@ -126,7 +131,7 @@ bmp = bmpxxx.BMP585(i2c=i2c, address=config.BMP_ADDR)
 # Measured VREF at 3.281V, not 3.3V when powered by USB-C
 VREF_MEASURED = 3.281  # data sheet value is 3.3v
 
-# DataLog file:# 4096 = 4032 (84 rows * 48 bytes) + 24 bytes of data + 36 null + 4 (CRC)
+# DataLog file:# 4096 = 4032 (84 rows * 48 bytes) + 24 bytes of metadata + 36 null + 4 (CRC)
 SECTOR_SIZE = const(4096)  # Exactly 4 KiB
 NUM_FLOATS = const(12)
 BYTES_PER_ROW = const(48)
@@ -170,7 +175,7 @@ def pico_temperature(debug=False):
     data sheet says 27C  is 0.706v, with a slope of -1.721mV per degree
     RP2350 hardware is natively 12-bit so no need to calc at 16-bit
 
-    :return: celsius
+    :return: Celsius
     """
     raw_temp = pico_temp_pin.read_u16()
     adc_v = ((raw_temp >> 4) / 4095) * VREF_MEASURED
