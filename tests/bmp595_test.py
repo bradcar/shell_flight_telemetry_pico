@@ -52,7 +52,6 @@ last_ts = ticks_us()
 last_pressure = bmp.pressure
 while True:
     # Pressure in hPA measured at sensor, temperature in Celsius
-
     pressure = bmp.pressure
     now = ticks_us()
     if pressure != last_pressure:
@@ -78,5 +77,3 @@ while True:
 #     # Altitude in meters and in feet/inches
 
 #    time.sleep(1.1)
-
-

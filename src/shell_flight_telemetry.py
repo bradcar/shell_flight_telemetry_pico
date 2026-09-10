@@ -1,5 +1,6 @@
-# log_shell_sensors_flash.py
 """
+shell_flight_telemetry.py
+
 Linear_acceleration, Quaternion, Gyro, and pressure (hPa) logging on Raspberry Pi Pico 2 (RP2350)
   - BNO086 is SPI sensor
   - BMP585 is I2C sensor
@@ -85,17 +86,19 @@ from array import array
 from sys import implementation
 
 import network
-from machine import SPI, I2C, Pin
+import machine
+from machine import SPI, I2C, Pin, ADC
+from micropython import const
 from lib.micropython_bmpxxx import bmpxxx
 from lib.spi import BNO08X_SPI
-from utime import sleep_ms, sleep_us, ticks_ms, ticks_us, ticks_add, ticks_diff
+from utime import sleep_ms, ticks_ms, ticks_diff
 
 import flight_log_config as config
 
 # ==== PIN DEFINITIONS ====
 # Internal pins
-vsys_adc_pin = machine.ADC(3)
-pico_temp_pin = machine.ADC(4)
+vsys_adc_pin = ADC(3)
+pico_temp_pin = ADC(4)
 
 # External pins
 int_pin = Pin(config.PIN_BNO_INT, Pin.IN)  # Interrupt, enables BNO to signal when ready
@@ -111,9 +114,11 @@ wake_pin = Pin(config.PIN_BNO_WAKE, Pin.OUT, value=1)  # BNO WAK
 pin_lift_trig = Pin(config.PIN_LIFT_TRIG, Pin.IN)
 
 # ==== SPI & I2C ====
+# noinspection PyArgumentList
 spi = SPI(config.SPI_ID, baudrate=3000000, sck=Pin(config.PIN_SCK), mosi=Pin(config.PIN_MOSI),
           miso=Pin(config.PIN_MISO))
 bno = BNO08X_SPI(spi, cs_pin, reset_pin, int_pin, wake_pin, debug=False)
+# noinspection PyArgumentList
 i2c = I2C(id=config.I2C_ID, scl=Pin(config.PIN_I2C_SCL), sda=Pin(config.PIN_I2C_SDA), freq=400_000)
 bmp = bmpxxx.BMP585(i2c=i2c, address=config.BMP_ADDR)
 
@@ -219,7 +224,7 @@ def log_info(message, file_handle=None):
         file_handle.flush()  # flush immediately
         try:
             os.sync()  # Force the physical write to flash
-        except:
+        except (OSError, AttributeError):
             pass
 
 
@@ -364,7 +369,7 @@ def write_results_by_sector(bno, bmp, max_rows: int, sensor_file_name: str, log_
         while not update(): pass
         _, _, _, _, bno_ms = lin_acc.full
 
-        # use bno timstamp as ground truth for all data timestamps
+        # use bno timestamp as ground truth for all data timestamps
         first_bno_ms = bno_ms
         max_celsius = bmp.temperature
         max_celsius_ms = bno_ms
@@ -760,7 +765,7 @@ def main():
     from machine import Timer
 
     led = Pin("LED", Pin.OUT)
-    timer = Timer()
+    timer = Timer(-1)
     timer.init(freq=20, mode=Timer.PERIODIC, callback=blink)
     sleep_ms(5000)
     timer.deinit()  # stop hardware timer firing
