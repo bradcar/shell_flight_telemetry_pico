@@ -1,8 +1,8 @@
-# quaternion_output_spi.py - Runs on Pico 2 W with BNO086 sensor outputs over USB-C
+# bno086_quaternion_spi.py - Runs on Pico 2 W with BNO086 sensor outputs over USB-C
 #
 # https://github.com/bradcar/bno08x_i2c_spi_MicroPython
 #
-# quaternion output at 200 Hz (5 millisec) on SPI interface.
+# quaternion output at 200 Hz (5 milli-sec) on SPI interface.
 # uses efficient sys.stdout.write
 
 import sys
@@ -28,15 +28,16 @@ bno = BNO08X_SPI(spi, cs_pin, reset_pin, int_pin, wake_pin)
 def main():
     bno.quaternion.enable(200)
 
-    # sensor provides frequencies at requested 100Hz
-    # bno.print_report_period()
+    # sensor provides frequencies at requested 200Hz
+    bno.print_report_period()
+    print("")
 
     while True:
         bno.update_sensors()
 
         if bno.quaternion.updated:
             qr, qi, qj, qk = bno.quaternion
-            
+
             # print(f"{qr:.4f},{qi:.4f},{qj:.4f},{qk:.4f}")
             output = f"{qr:.4f},{qi:.4f},{qj:.4f},{qk:.4f}\n"
             sys.stdout.write(output)

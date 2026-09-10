@@ -20,7 +20,7 @@ import time
 import network
 from machine import Pin
 
-import flight_log_config as config
+from lib import flight_log_config as config
 
 # Status LED
 led = Pin("LED", Pin.OUT)
