@@ -3,16 +3,20 @@ from micropython import const
 
 # --- FLIGHT/LOCATION PARAMETERS ---
 # File for flight Log Data
-DATE_STR = "20260520"
-FLIGHT_STR = "f06"
+DATE_STR = "20260910"
+FLIGHT_STR = "f07"
 SENSOR_FILE_NAME = f"flight_log_{DATE_STR}_{FLIGHT_STR}.bin"
 SCRIPT_FILE_NAME = f"script_log_{DATE_STR}_{FLIGHT_STR}.txt"
 
 # Location Parameters
 SITE_DATE = f"{DATE_STR[4:6]}/{DATE_STR[6:8]}/{DATE_STR[0:4]}"
-SITE_ADDRESS = "343 Howanut Rd, Oakville, WA 98658"
-SITE_GPS = "46.81593° N, 123.18358° W"
-SITE_ELEVATION = 29.87  # Meters above sea level, Chehalis 19.87m = 98'
+# SITE_ADDRESS = "343 Howanut Rd, Oakville, WA 98658"
+# SITE_GPS = "46.81593° N, 123.18358° W"
+
+# WPA DO-IT B-Line
+SITE_ADDRESS = "Race Track, Bonaza Road, Hawthorne, NV  89415"
+SITE_GPS = "38.54273° N, 118.62028° W"
+SITE_ELEVATION = 4230.0 * 0.3048  # Meters above sea level HTH airport
 
 # Flight Parameters
 FLIGHT_DURATION_SEC = 3  # 30 sec?
