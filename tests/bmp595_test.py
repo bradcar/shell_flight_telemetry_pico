@@ -1,7 +1,8 @@
-from utime import sleep_ms, ticks_ms, ticks_us, sleep_us
+from utime import ticks_us
 from machine import Pin, I2C
 from lib.micropython_bmpxxx import bmpxxx
 
+# noinspection PyArgumentList
 i2c = I2C(id=0, scl=Pin(13), sda=Pin(12), freq=400_000)
 
 i2c_devices = i2c.scan()
