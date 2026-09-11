@@ -15,8 +15,8 @@ Network Configuration:
 Server & Concurrency Architecture:
     - Single-threaded blocking TCP server listening on port 80 with socket backlog of 3.
     - Serves one connection at a time. Concurrent client requests are queued in
-      the socket backlog. Ttypical log downloads take ~0.5 seconds, avoiding timeoutd.
-    - Utilizes a zero-allocation static bytearray buffer (`memoryview`) for chunked
+      the socket backlog. Typical log downloads take ~0.5 seconds, avoiding timeoutd.
+    - Utilizes a zero-allocation static bytearray buffer ("memoryview") for chunked
       file transfers.
 
 Major Functions:
@@ -127,8 +127,10 @@ def run_web_server(filename, stream_buffer):
                 conn.close()
                 led.value(0)
                 gc.collect()
-    except:
+    except KeyboardInterrupt:
         print("\nCtrl-C - Stopping web server...")
+    except OSError as e:
+        print(f"\nServer socket error: {e}")
     finally:
         server.close()
         print("Server socket closed.")
