@@ -32,10 +32,7 @@ PW_STRING = "pyropyro"
 
 def ap_mode(ssid, password):
     """Standard Wi-Fi Access Point setup routine."""
-    print(f"\nFree memory before AP setup: {gc.mem_free()} bytes")
     gc.collect()
-    print(f"Free memory after GC: {gc.mem_free()} bytes\n")
-
     ap = network.WLAN(network.AP_IF)
     ap.active(True)
     ap.config(essid=ssid, password=password)
@@ -51,7 +48,7 @@ def ap_mode(ssid, password):
 
     ip = ap.ifconfig()[0]
     print("Access Point Mode is active.")
-    print(f"Connect to Wi-Fi network: {ssid} \nDownload page at: http://{ip}\n")
+    print(f"\nConnect to Wi-Fi network: {ssid} \nDownload page at: http://{ip}\n")
     return ip
 
 
@@ -181,6 +178,14 @@ def handle_file_download(conn, filename, counter, stream_buffer):
         return counter
 
 
+def disable_ap():
+    """Shuts down the Wi-Fi AP interface cleanly."""
+    ap = network.WLAN(network.AP_IF)
+    if ap.active():
+        ap.active(False)
+        print("Wi-Fi Access Point interface disabled.")
+
+
 # ---- TODO USE ABOVE GENERIC METHODS TO CREATE wifi_web_utils.py -------------------------------------------------
 
 
@@ -212,39 +217,46 @@ def run_web_server(filename, stream_buffer):
     download_counter = 0
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    server.bind(('', 80))
-    server.listen(3)
-    print("Web server listening...")
 
-    while True:
-        conn, addr = server.accept()
-        led.value(1)
+    try:
+        server.bind(('', 80))
+        server.listen(3)
+        print("Web server listening...")
 
-        try:
-            path = parse_request(conn, addr)
-            if path is None:
-                continue
+        while True:
+            conn, addr = server.accept()
+            led.value(1)
 
-            if path == "/favicon.ico":
-                try:
-                    conn.sendall(b"HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n")
-                except OSError:
-                    pass
-                continue
+            try:
+                path = parse_request(conn, addr)
+                if path is None:
+                    continue
 
-            if path == "/download":
-                print(f"\nStarting download (#{download_counter}) to {addr} (Client: {addr[0]})...")
-                download_counter = handle_file_download(conn, filename, download_counter, stream_buffer)
-                continue
+                if path == "/favicon.ico":
+                    try:
+                        conn.sendall(b"HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n")
+                    except OSError:
+                        pass
+                    continue
 
-            # Base route ("/" or index)
-            print(f"Serving HTML download index page to {addr}")
-            send_html_page(conn, download_web_page(filename))
+                if path == "/download":
+                    print(f"\nStarting download (#{download_counter}) to {addr} (Client: {addr[0]})...")
+                    download_counter = handle_file_download(conn, filename, download_counter, stream_buffer)
+                    continue
 
-        finally:
-            conn.close()
-            led.value(0)
-            gc.collect()
+                # Base route ("/" or index)
+                print(f"Serving HTML download index page to {addr}")
+                send_html_page(conn, download_web_page(filename))
+
+            finally:
+                conn.close()
+                led.value(0)
+                gc.collect()
+    except:
+        print("\nCtrl-C - Stopping web server...")
+    finally:
+        server.close()
+        print("Server socket closed.")
 
 
 def main():
@@ -253,8 +265,15 @@ def main():
     stream_buffer = bytearray(wifi_chunk)  # Zero-allocation static heap buffer
 
     print("Initializing Pico's AP (Access Point) Download serving...")
-    ap_mode(SSID_STRING, PW_STRING)
-    run_web_server(filename, stream_buffer)
+    try:
+        ap_mode(SSID_STRING, PW_STRING)
+        run_web_server(filename, stream_buffer)
+    except KeyboardInterrupt:
+        print("\nCtrl-C Program terminated by user.")
+    finally:
+        disable_ap()
+        led.value(0)
+        print("Cleanup complete.")
 
 
 if __name__ == "__main__":
