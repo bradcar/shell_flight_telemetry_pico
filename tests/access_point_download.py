@@ -22,13 +22,13 @@ Server & Concurrency Architecture:
 Major Functions:
     - ap_mode(ssid, password):
       Activates the Wi-Fi Access Point interface, checks link readiness with
-      a timeout loop, and returns the assigned IP address.
+      a timeout loop, and returns the IP address.
 
     - run_web_server(filename, stream_buffer):
       Main web server loop. Binds socket port 80. Accepts incoming TCP client connections,
       toggles the status LED during active requests.
-        *  When a user types http://192.168.4.1 in their browser, it requests the root path (/).
-           The code routes this request to send_html_page(), which renders the web page with the "Download Binary Log" button.
+        * When a user types http://192.168.4.1 in their browser, it requests the root path (/).
+          The code routes this request to send_html_page(), which renders the web page with the "Download Binary Log" button.
         * When the user clicks the download button, the browser requests http://192.168.4.1/download.
           The code identifies /download and routes it to handle_file_download(), which streams the .bin flight log file to their device.
         * Browsers automatically ask for a website icon (favicon) every time they visit a page.
@@ -51,7 +51,11 @@ led = Pin("LED", Pin.OUT)
 
 
 def download_web_page(filename):
-    """Returns download dashboard page HTML."""
+    """
+    Returns download dashboard page HTML.
+
+    Page with simple blue download button.
+    """
     return f"""<!DOCTYPE html>
 <html>
 <head>
@@ -78,13 +82,15 @@ def run_web_server(filename, stream_buffer):
     """
     Main web server loop. Binds socket port 80. Accepts incoming TCP client connections,
     toggles the status LED during active requests.
-    *  When a user types http://192.168.4.1 in their browser, it requests the root path (/).
-       The code routes this request to send_html_page(), which renders the web page with the "Download Binary Log" button.
+
+    * When a user types http://192.168.4.1 in their browser, it requests the root path (/).
+      The code routes this request to send_html_page(), which renders the web page with the "Download Binary Log" button.
     * When the user clicks the download button, the browser requests http://192.168.4.1/download.
       The code identifies /download and routes it to handle_file_download(), which streams the .bin flight log file to their device.
     * Browsers automatically ask for a website icon (favicon) every time they visit a page.
       The code catches /favicon.ico and immediately responds with 204 No Content to tell the browser
       "there is no icon" quickly and silently.
+
     :param filename:
     :param stream_buffer:
     :return:
@@ -128,7 +134,7 @@ def run_web_server(filename, stream_buffer):
                 led.value(0)
                 gc.collect()
     except KeyboardInterrupt:
-        print("\nCtrl-C - Stopping web server...")
+        print("\nCtrl-C  Stopping web server...")
     except OSError as e:
         print(f"\nServer socket error: {e}")
     finally:
@@ -137,13 +143,17 @@ def run_web_server(filename, stream_buffer):
 
 
 def main():
-    wifi_chunk = 2048  # efficient TCP payload streaming on Pico W
+    wifi_chunk = 2048  # Efficient TCP payload streaming on Pico W
     stream_buffer = bytearray(wifi_chunk)  # Zero-allocation static heap buffer
 
     print("Initializing Pico's AP (Access Point) Download serving...")
     try:
-        ap_mode(config.SSID_STRING, config.PW_STRING)
+        # Brings up Wi-Fi, can log into after execution
+        ip = ap_mode(config.SSID_STRING, config.PW_STRING)
+
+        # Servers Web Page to download file
         run_web_server(config.SENSOR_FILE_NAME, stream_buffer)
+
     except KeyboardInterrupt:
         print("\nCtrl-C Program terminated by user.")
     finally:
