@@ -8,7 +8,6 @@
 import sys
 from machine import SPI, Pin
 from lib.spi import BNO08X_SPI
-from utime import ticks_ms
 
 int_pin = Pin(14, Pin.IN, Pin.PULL_UP)  # Interrupt, enables BNO to signal when ready
 reset_pin = Pin(15, Pin.OUT, value=1)  # Reset to signal BNO to reset
@@ -28,7 +27,7 @@ bno = BNO08X_SPI(spi, cs_pin, reset_pin, int_pin, wake_pin)
 def main():
     bno.quaternion.enable(200)
 
-    # sensor provides frequencies at requested 200Hz
+    # Sensor provides frequencies at requested 200Hz
     bno.print_report_period()
     print("")
 
