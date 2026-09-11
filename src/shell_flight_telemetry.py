@@ -20,15 +20,15 @@ CHECKLIST:
  o charge LiPoly battery
 
  Pre-flight
- o Update Date in flight_log_config.py
- o Update flight number f001, f002, etc. in flight_log_config.py
+ o Update Date in shell_flight_telemetry_config.py
+ o Update flight number f001, f002, etc. in shell_flight_telemetry_config.py
  o run log_linacc_quat_gyro_hpa_flash_spi.py
    o check calibration when plugged into laptop
    o disconnect laptop, starts logging
    o light fuse within 10 secs
    o make sure logging runs for 30 secs (10 sec disconnect, 6 sec ascent, 10-12 sec drop)
 
-REQUIRES: flight_log_config.py
+REQUIRES: shell_flight_telemetry_config.py
  * which contains location altitude, log_file_name, and pin configuration !!!
 
 This code checks the IMU calibration accuracy of the bno.linear_acceleration, bno.quaternion, and bno.gyro and
@@ -50,25 +50,31 @@ At IMU sampling rate of 5ms (200Hz) a sector-size is ~0.43 sec of data. Each fla
 (duty cycle settable in code) will cause 50 ms to 110 ms jitter in sample collection.
 
 Data Structure (The 48-byte Row):
-  packed binary format using struct.pack_into:
-  Each Row
-  * Timestamp (4 bytes: f)
-  * Linear Accel (12 bytes: x, y, z) - Bias corrected
-  * Quaternion (16 bytes: r, i, j, k) - For orientation
-  * Gyroscope (12 bytes: y, p, r) - Bias corrected
-  * Pressure (4 bytes: hpa)
-
-  Footer - end of sector(at CUSTOM_DATA_OFFSET):
-  * Sector Index/number 0 start (4-bytes: I)
-  * Interrupt Timestamps captured via hardware IRQs (Pins 21 and 22):
-     - lift_trigger_ms (4 bytes: f)
-     - top_flame_trigger_ms. (4 bytes: f)
-  * max_celsius_during_sector (4 bytes: f)
-  * max_celsius_ts_ms (4 bytes: f)
-  * CRC32: (4 bytes, I) binascii.crc32 is calculated over the first 4092 bytes.
+todo check if mqx Celsius during sector in bno_ms
+┌──────────────────────────────────────────────────────────────────────────┐
+│ Offset 0..4031    : 84 Data Rows × 48 Bytes                              │
+│   Each Row  - 48 bytes Total                                             │
+│   * Timestamp    (4 bytes: f)  Lift detector, in bno_ms                  │
+│   * Linear Accel (12 bytes: x, y, z) - Bias corrected                    │
+│   * Quaternion   (16 bytes: r, i, j, k) - For orientation                │
+│   * Gyroscope    (12 bytes: y, p, r) - Bias corrected                    │
+│   *  Pressure    (4 bytes: hpa)                                          │
+├──────────────────────────────────────────────────────────────────────────┤
+│ Offset 4032..4055 : Sector Metadata (24 Bytes)                           │
+│   * sector_idx      (I)  sector index                                    │
+│   * lift_bno_ms     (f)  Lift detector, in bno_ms                        │
+│   * vsys_voltage    (f)  Vsys_voltage during sector                      │
+│   * max_celsius     (f)  Max Celsius during sector                       │
+│   * max_celsius_ms  (f)  Time of Max Celsius                             │
+│   * min_accuracy    (I)  Min accuracy during sector                      │
+├──────────────────────────────────────────────────────────────────────────┤
+│ Offset 4056..4091 : Padding / left over (36 Bytes)                       │
+├──────────────────────────────────────────────────────────────────────────┤
+│ Offset 4092..4095 : CRC32 Checksum (4 Bytes, binascii.crc32) 0 to 4091   │
+└──────────────────────────────────────────────────────────────────────────┘
 
 Input:
-    *** CAUTION: TIME IN msec NOT SECONDS, for BNO086 efficiency at 5ms 200Hz
+    *** CAUTION: TIME IN msec NOT SECONDS, for BNO086 efficiency at 5ms 200 Hz
     ax, ay, az, acc, ts_ms = bno.linear_acceleration.full
     qr, qi, qj, qk = bno.quaternion
     gy, gp, gr = bno.gyro
@@ -98,7 +104,7 @@ from lib.micropython_bmpxxx import bmpxxx
 from lib.spi import BNO08X_SPI
 from utime import sleep_ms, ticks_ms, ticks_diff
 
-from lib import flight_log_config as config
+import shell_flight_telemetry_config as config
 
 # ==== PIN DEFINITIONS ====
 # Internal pins
@@ -115,7 +121,7 @@ cs_pin = Pin(config.PIN_BNO_CS, Pin.OUT, value=1)
 # mosi=Pin(19) - BNO SI (PICO)
 wake_pin = Pin(config.PIN_BNO_WAKE, Pin.OUT, value=1)  # BNO WAK
 
-# Configure pins with Pull-Up resistors so they stay High until grounded
+# Configure pins with pull-Up resistors so they stay High until grounded
 pin_lift_trig = Pin(config.PIN_LIFT_TRIG, Pin.IN)
 
 # ==== SPI & I2C ====
@@ -128,6 +134,7 @@ i2c = I2C(id=config.I2C_ID, scl=Pin(config.PIN_I2C_SCL), sda=Pin(config.PIN_I2C_
 bmp = bmpxxx.BMP585(i2c=i2c, address=config.BMP_ADDR)
 
 # ==== GLOBALS & CONSTANTS ====
+DEBUG = False
 # Measured VREF at 3.281V, not 3.3V when powered by USB-C
 VREF_MEASURED = 3.281  # data sheet value is 3.3v
 
@@ -139,7 +146,11 @@ ROWS_PER_SECTOR = const(84)
 DATA_SIZE = BYTES_PER_ROW * ROWS_PER_SECTOR  # 4032 bytes = 84 * 48
 CUSTOM_DATA_OFFSET = DATA_SIZE
 CRC_OFFSET = const(4092)  # The very last 4 bytes
-pack_string = "<" + (NUM_FLOATS * "f")  # number of f's match count
+# pack_string = "<" + (NUM_FLOATS * "f")  # number of f's match count
+# Pre-compile binary layouts to eliminate string parsing inside high-speed loops
+ROW_STRUCT = "<12f"
+META_STRUCT = "<IffffI"
+CRC_STRUCT = "<I"
 
 # GLOBALS for Bias Correction
 AX_BIAS = 0.0
@@ -181,7 +192,7 @@ def pico_temperature(debug=False):
     adc_v = ((raw_temp >> 4) / 4095) * VREF_MEASURED
     celsius = 27.0 - (adc_v - 0.706) / 0.001721
 
-    if debug:
+    if DEBUG:
         print(f"raw_temp = {raw_temp}")
         print(f"on chip temp = {celsius:.3f}C")
     return celsius
@@ -210,12 +221,6 @@ def pico_vsys_voltage(debug=False):
     # The Pico 2 W RP2350 Adjustment
     vsys_fudge_factor = 2.332  # adjusted from 3v to match usb-c voltmeter
     vsys = (raw_vsys / 4095) * VREF_MEASURED * vsys_fudge_factor
-
-    #     if debug:
-    #         print(f"VSYS Raw (12-bit): {raw_vsys}")
-    #         print(f"VREF MEASURED: {VREF_MEASURED}")
-    #         print(f"Voltage: {vsys:.2f}V")
-
     return vsys
 
 
@@ -344,22 +349,25 @@ def write_results_by_sector(bno, bmp, max_rows: int, sensor_file_name: str, log_
     WARNING: Can not measure voltages with this API
     """
     global AX_BIAS, AY_BIAS, AZ_BIAS, GY_BIAS, GP_BIAS, GR_BIAS
-    global bno_ms, lift_bno_ms
-    global lift_handled, lift_bno_ms, bno_ms
+    global bno_ms, lift_bno_ms, lift_handled
 
-    # Buffer of exactly 4 KiB, data: 4092 CRC: last 4 bytes
     sector_buffer = bytearray(SECTOR_SIZE)
+    # Zero-copy float view mapping directly to sector_buffer's 4032 data bytes
+    row_floats = array('f', memoryview(sector_buffer)[:DATA_SIZE])
 
     # localize globals for efficiency
     ax_offset, ay_offset, az_offset = AX_BIAS, AY_BIAS, AZ_BIAS
     gy_offset, gp_offset, gr_offset = GY_BIAS, GP_BIAS, GR_BIAS
 
     update = bno.update_sensors
-    pack_into = struct.pack_into
-    crc32 = binascii.crc32
     lin_acc = bno.linear_acceleration
     quat = bno.quaternion
     gyro = bno.gyro
+
+    pack_into = struct.pack_into
+    crc32 = binascii.crc32
+
+    gc.collect()
 
     with open(sensor_file_name, "wb") as f:
         log_info(f"  Opened Sensor Data file: {sensor_file_name}", log_file)
@@ -379,17 +387,14 @@ def write_results_by_sector(bno, bmp, max_rows: int, sensor_file_name: str, log_
         max_celsius = bmp.temperature
         max_celsius_ms = bno_ms
 
-        # capture the log dat and loop until all desired max_rows collected
+        # capture the log data and loop until all desired max_rows collected
         while i < max_rows:
 
             # ** Start New Sector Write: 4096 sector-sized batches
             sector_row_count = 0
             min_accuracy = 4  # notice 3 is highest accuracy
 
-            # zero-fill metadata, padding, and CRC part of sector buffer
-            sector_buffer[DATA_SIZE:] = b"\x00" * (SECTOR_SIZE - DATA_SIZE)
-
-            # *** Write a row of data
+            # Write each row of data
             update_count = 0
             while sector_row_count < ROWS_PER_SECTOR and i < max_rows:
                 if not update():
@@ -410,18 +415,24 @@ def write_results_by_sector(bno, bmp, max_rows: int, sensor_file_name: str, log_
                     min_accuracy = min(min_accuracy, acc)
 
                     # 12 values per row (1 timestamp, 3 accel, 4 quat, 3 gyro, 1 hpa)
-                    offset = sector_row_count * BYTES_PER_ROW
-                    pack_into(pack_string, sector_buffer, offset,
-                              bno_ms,
-                              ax - ax_offset, ay - ay_offset, az - az_offset,
-                              qr, qi, qj, qk,
-                              gy - gy_offset, gp - gp_offset, gr - gr_offset,
-                              hpa)
+                    f_idx = sector_row_count * 12
+                    row_floats[f_idx] = bno_ms
+                    row_floats[f_idx + 1] = ax - ax_offset
+                    row_floats[f_idx + 2] = ay - ay_offset
+                    row_floats[f_idx + 3] = az - az_offset
+                    row_floats[f_idx + 4] = qr
+                    row_floats[f_idx + 5] = qi
+                    row_floats[f_idx + 6] = qj
+                    row_floats[f_idx + 7] = qk
+                    row_floats[f_idx + 8] = gy - gy_offset
+                    row_floats[f_idx + 9] = gp - gp_offset
+                    row_floats[f_idx + 10] = gr - gr_offset
+                    row_floats[f_idx + 11] = hpa
 
                     sector_row_count += 1
                     i += 1
 
-            # ZERO-FILL unused rows and zero metadata(insurance) & padding
+            # ZERO-FILL unused rows and zero metadata (insurance?) & padding
             if sector_row_count < ROWS_PER_SECTOR:
                 start_fill = sector_row_count * BYTES_PER_ROW
                 sector_buffer[start_fill:DATA_SIZE] = b"\x00" * (DATA_SIZE - start_fill)
@@ -430,26 +441,30 @@ def write_results_by_sector(bno, bmp, max_rows: int, sensor_file_name: str, log_
             # vsys_voltage = 0.0
 
             # write metadata footer at end of Sector (24 bytes = 6 * 4 bytes)
-            struct.pack_into("<IffffI", sector_buffer, CUSTOM_DATA_OFFSET,
-                             sector_idx,  # I
-                             lift_bno_ms,  # f, lift_bno_ms is updated in Interrupt Handler
-                             vsys_voltage,  # f
-                             max_celsius,  # f
-                             max_celsius_ms,  # f
-                             min_accuracy)  # I
+            pack_into(META_STRUCT, sector_buffer, CUSTOM_DATA_OFFSET,
+                      sector_idx,  # I
+                      lift_bno_ms,  # f, lift_bno_ms is updated in Interrupt Handler
+                      vsys_voltage,  # f
+                      max_celsius,  # f
+                      max_celsius_ms,  # f
+                      min_accuracy)  # I
 
             # Calculate CRC over everything EXCEPT the CRC's last 4 bytes (4092 bytes total)
             crc = crc32(memoryview(sector_buffer)[:4092])
-            struct.pack_into("<I", sector_buffer, CRC_OFFSET, crc)
+            pack_into(CRC_STRUCT, sector_buffer, CRC_OFFSET, crc)
 
             # Write sector to flash:  bytes 0-4091 are data, last 4 bytes are CRC or 0x00 padding
             f.write(sector_buffer)  # Write exactly 4 KiB
+
+            # reset Max Celsius for each sector
+            max_celsius = bmp.temperature
+            max_celsius_ms = bno_ms
 
             # Flush every other sector (about 1 sec)
             if sector_idx % 2 == 0:
                 f.flush()
 
-            # Debug
+            # DEBUG
             # print(f"\nSector {sector_idx}: stats")
             # print(f"sector_row_count: {sector_row_count} of {ROWS_PER_SECTOR}")
             # print(f"Sector Max Celsius: {max_celsius_during_sector:.2f}° C at {max_celsius_ts_ms} ms")
@@ -463,12 +478,15 @@ def write_results_by_sector(bno, bmp, max_rows: int, sensor_file_name: str, log_
             #     print(f"Lift - Top Frame: {us_delta / 1000.0:.5f} ms")
 
             sector_idx += 1
-            # Debug timing for each write, measured 45 ms
+            # DEBUG timing for each write, measured 45 ms
             # write_time = ticks_diff(ticks_ms(), write_start)
-            # print(f"Sector flushed (4 KiB). Write: {write_time} ms. Total Rows so far: {i}")
+            # print(f"Sector flushed (4 KiB). Write: {write_time} msec. Total Rows so far: {i}")
 
         f.flush()
         os.sync()
+
+        # GC after logging completes or if an exception occurs
+    gc.collect()
 
     pico_ms = ticks_diff(ticks_ms(), start_pico_ms)
     while not bno.update_sensors(): pass
