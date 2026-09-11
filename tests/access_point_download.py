@@ -4,7 +4,7 @@ access_point_download.py
 
 Access Point (AP) download test program for MicroPython (Raspberry Pi Pico W).
 Configures an AP interface to serve a downloadable telemetry log file (~295 KiB)
-over a lightweight HTTP server.
+over a fast lightweight HTTP server.
 
 Network Configuration:
     - Default URL   : http://192.168.4.1
@@ -15,7 +15,7 @@ Network Configuration:
 Server & Concurrency Architecture:
     - Single-threaded blocking TCP server listening on port 80 with socket backlog of 3.
     - Serves one connection at a time. Concurrent client requests are queued in
-      the socket backlog. Typical log downloads take ~0.5 seconds, avoiding timeoutd.
+      the socket backlog. Typical log downloads take ~0.5 seconds, which avoids timeouts.
     - Utilizes a zero-allocation static bytearray buffer ("memoryview") for chunked
       file transfers.
 
