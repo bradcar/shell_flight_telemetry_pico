@@ -1,10 +1,10 @@
-# flight_log_config.py
+# shell_flight_telemetry_config.py
 from micropython import const
 
 # --- FLIGHT/LOCATION PARAMETERS ---
 # File for flight Log Data
-DATE_STR = "20260910"
-FLIGHT_STR = "f07"
+DATE_STR = "20260520"
+FLIGHT_STR = "f06"
 SENSOR_FILE_NAME = f"flight_log_{DATE_STR}_{FLIGHT_STR}.bin"
 SCRIPT_FILE_NAME = f"script_log_{DATE_STR}_{FLIGHT_STR}.txt"
 
@@ -29,6 +29,11 @@ BIAS_REQUIRED_SEC = 1  # Collect 1 second of data for bias
 # USB voltage 
 USB_DISCONNECT_THRESHOLD = 4.5  # Detect voltage drop Trigger when USB-C disconnect and VSYS drops below 4.2V
 
+# --- Wi-Fi PARAMETERS ---
+# Access Point (AP) Credentials
+SSID_STRING = "shell-fi"
+PW_STRING = "pyropyro"
+
 # ===============================================================
 # --- Hardware Pin Assignments ---
 # SPI 0 for BNO086
@@ -49,11 +54,10 @@ BMP_ADDR = 0x47
 
 # Interrupt Pins (Payload Triggers)
 PIN_LIFT_TRIG = const(21)
-#PIN_FLAME_TRIG = const(22)
+# PIN_FLAME_TRIG = const(22)
 
 # 3.3v ─ link ─+─ GPIO
 #              |
 #            10 kΩ
 #              |
 #             GND
-                                       
