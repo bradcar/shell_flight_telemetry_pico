@@ -3,11 +3,10 @@
 access_point_download.py
 
 Access Point (AP) download test program for MicroPython (Raspberry Pi Pico W).
-Configures an AP interface to serve a downloadable telemetry log file (~295 KiB)
+Configures an AP interface to serve a downloadable telemetry log file (~288 KiB)
 over a fast lightweight HTTP server.
 
 Network Configuration:
-    - Default URL   : http://192.168.4.1
     - SSID          : shell-fi
     - Password      : pyropyro
     - Hardware BSSID: 2C:CF:67:CA:83:3E
@@ -27,9 +26,9 @@ Major Functions:
     - run_web_server(filename, stream_buffer):
       Main web server loop. Binds socket port 80. Accepts incoming TCP client connections,
       toggles the status LED during active requests.
-        * When a user types http://192.168.4.1 in their browser, it requests the root path (/).
+        * When a user types thr ip returnedf by ap_mode in their browser, it requests the root path (/).
           The code routes this request to send_html_page(), which renders the web page with the "Download Binary Log" button.
-        * When the user clicks the download button, the browser requests http://192.168.4.1/download.
+        * When the user clicks the download button, the browser requests (ex: http://192.168.4.1/download)
           The code identifies /download and routes it to handle_file_download(), which streams the .bin flight log file to their device.
         * Browsers automatically ask for a website icon (favicon) every time they visit a page.
           The code catches /favicon.ico and immediately responds with 204 No Content to tell the browser
@@ -93,7 +92,6 @@ def run_web_server(filename, stream_buffer):
 
     :param filename:
     :param stream_buffer:
-    :return:
     """
     download_counter = 0
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -119,15 +117,24 @@ def run_web_server(filename, stream_buffer):
                     except OSError:
                         pass
                     continue
-
                 if path == "/download":
-                    print(f"\nStarting download (#{download_counter}) to {addr} (Client: {addr[0]})...")
-                    download_counter = handle_file_download(conn, filename, download_counter, stream_buffer)
-                    continue
+                    print(f"\nStarting download (#{download_counter}) from Client: {addr[0]}, {addr[1]}")
+                    download_name, download_counter, total_bytes_sent, duration_secs = handle_file_download(conn,
+                                                                                                            filename,
+                                                                                                            download_counter,
+                                                                                                            stream_buffer)
 
-                # Base route ("/" or index)
-                print(f"Serving HTML download index page to {addr}")
-                send_html_page(conn, download_web_page(filename))
+                    if duration_secs > 0:
+                        print("Download data transfer complete.")
+                        mbps = (total_bytes_sent * 8) / 1_000_000 / duration_secs
+                        print(f"  -> Sent: {total_bytes_sent} bytes as {download_name}")
+                        print(f"  -> Time: {duration_secs:.2f} secs")
+                        print(f"  -> Rate: {mbps:.2f} Mb/s")
+                    continue
+                if path == "/" or path == "/index.html":
+                    send_html_page(conn, download_web_page(filename))
+                else:
+                    send_404_page(conn)
 
             finally:
                 conn.close()
@@ -148,10 +155,17 @@ def main():
 
     print("Initializing Pico's AP (Access Point) Download serving...")
     try:
-        # Brings up Wi-Fi, can log into after execution
-        ip = ap_mode(config.SSID_STRING, config.PW_STRING)
+        ssid = config.SSID_STRING
+        ip = ap_mode(ssid, config.PW_STRING)
 
-        # Servers Web Page to download file
+        if ip is not None:
+            print("\nAccess Point Mode is active, can log into network.\n")
+            print(f"Connect to Wi-Fi network: {ssid}")
+            print(f"Download page at: http://{ip}/\n")
+        else:
+            raise RuntimeError(f"AP is not active and has no valid IPv4 address for : {ssid}")
+
+        # Start the HTTP server for the download page and file.
         run_web_server(config.SENSOR_FILE_NAME, stream_buffer)
 
     except KeyboardInterrupt:

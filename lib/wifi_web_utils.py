@@ -9,6 +9,8 @@ send_html_page - Formats and transmits standard HTTP headers along with HTML con
 get_download_filename - Formats the output download filename by appending a sequential version counter prior to the file extension.
 handle_file_download - downloads file, including 404 responses, header delivery, streaming, and throughput logging.
 disable_ap - Safely deactivates and powers down the active Wi-Fi Access Point interface.
+
+TODO replace prints with logging
 """
 import gc
 import network
@@ -16,26 +18,30 @@ import time
 
 import os
 
+REQUEST_TIMEOUT = 0.4
+
 
 def ap_mode(ssid, password):
     """Standard Wi-Fi Access Point setup routine."""
     gc.collect()
     ap = network.WLAN(network.AP_IF)
     ap.active(True)
-    ap.config(essid=ssid, password=password)
+    ap.config(ssid=ssid, password=password)
 
-    # Retry loop with timeout guard
-    retries = 50
-    while not ap.active() and retries > 0:
-        time.sleep(0.1)
-        retries -= 1
+    # Retry loop waiting for interface activation AND valid IP assignment
+    deadline = time.ticks_add(time.ticks_ms(), 5000)  # 5 second timeout
+    ip = "0.0.0.0"
 
-    if not ap.active():
-        raise RuntimeError("Failed to activate Wi-Fi Access Point interface.")
+    while time.ticks_diff(deadline, time.ticks_ms()) > 0:
+        if ap.active():
+            ip = ap.ifconfig()[0]
+            if ip != "0.0.0.0":
+                break
+        time.sleep_ms(50)
 
-    ip = ap.ifconfig()[0]
-    print("Access Point Mode is active.")
-    print(f"\nConnect to Wi-Fi network: {ssid} \nDownload page at: http://{ip}\n")
+    if not ap.active() or ip == "0.0.0.0":
+        raise RuntimeError("Failed to activate Wi-Fi Access Point interface or assign IP.")
+
     return ip
 
 
@@ -43,17 +49,22 @@ def get_file_size(filename):
     """Check file existence and size."""
     try:
         return os.stat(filename)[6]
-    except OSError:
+    except OSError as e:
+        print(f"Error: Unable to access {filename!r} on flash: {e}.")
         return None
 
 
 def send_file_stream(conn, filename, stream_buffer):
-    """Streams binary file directly over socket using slice view on stream_buffer."""
+    """
+    Streams binary file directly over socket using slice view on stream_buffer.
+
+    The caller owns the socket and is responsible for closing it.
+    """
     total_bytes_sent = 0
     start_time = time.ticks_ms()
     buf_view = memoryview(stream_buffer)
 
-    gc.collect()  # Clean transient garbage prior to file streaming
+    gc.collect()  # Garbage collect prior to file streaming
     with open(filename, "rb") as f:
         while True:
             bytes_read = f.readinto(stream_buffer)
@@ -64,7 +75,7 @@ def send_file_stream(conn, filename, stream_buffer):
             while bytes_sent_acc < bytes_read:
                 # send() returns sent byte count, sendall() returns None
                 sent = conn.send(buf_view[bytes_sent_acc:bytes_read])
-                if sent == 0:
+                if sent is None or sent <= 0:
                     raise OSError("Error: Wifi Socket connection broken by client")
                 bytes_sent_acc += sent
 
@@ -72,29 +83,40 @@ def send_file_stream(conn, filename, stream_buffer):
 
     duration_ms = time.ticks_diff(time.ticks_ms(), start_time)
     duration_secs = duration_ms / 1000.0
-    print("Download complete. Sending socket shutdown flags.")
-    return duration_secs, total_bytes_sent
+    return total_bytes_sent, duration_secs
 
 
 def parse_request(conn, addr):
     """HTTP request-line parser with non-blocking timeout handling and socket cleanup."""
     try:
-        conn.settimeout(0.4)
+        conn.settimeout(REQUEST_TIMEOUT)
         request = conn.recv(1024)
         if not request or b' ' not in request:
             return None
 
-        request_line = request.decode('utf-8', 'ignore').split('\r\n')[0]
-        parts = request_line.split(' ')
+        request_line = request.decode("utf-8", "ignore").split("\r\n", 1)[0]
+        parts = request_line.split()
+
         if len(parts) < 2:
             return None
 
-        return parts[1]
+        method = parts[0]
+        path = parts[1]
+
+        if method != "GET":
+            print(f"  Ignoring unsupported HTTP method {method!r} from {addr}")
+            return None
+
+        return path
+
     except OSError as e:
-        if e.args[0] == 104:
-            print(f"  Note: Speculative browser handshake dropped cleanly from {addr}")
-        elif e.args[0] == 110 or "timeout" in str(e).lower():
-            print(f"  Note: Abandoned backlog connection from {addr} timed out cleanly.")
+        error_code = e.args[0] if e.args else None
+        error_text = str(e).lower()
+
+        if "timeout" in error_text or error_code == 110:
+            print(f"  Note: Request from {addr} timed out.")
+        elif "reset" in error_text or error_code == 104:
+            print(f"  Note: Client {addr} reset the connection.")
         else:
             print(f"Error: Request initialization error from {addr}: {e}")
         return None
@@ -137,7 +159,7 @@ def handle_file_download(conn, filename, counter, stream_buffer):
         except OSError:
             pass
         print(f"Error: {filename} not found on flash.")
-        return counter
+        return None, counter, 0, 0.0
 
     download_name = get_download_filename(filename, counter)
     headers = (
@@ -148,21 +170,16 @@ def handle_file_download(conn, filename, counter, stream_buffer):
         "Connection: close\r\n\r\n"
     )
 
+    duration_secs = 0.0
+    total_bytes_sent = 0
     try:
         conn.sendall(headers.encode('utf-8'))
-        duration_secs, total_bytes_sent = send_file_stream(conn, filename, stream_buffer)
-
-        if duration_secs > 0:
-            mbps = (total_bytes_sent * 8) / 1_000_000 / duration_secs
-            print(f"  -> Sent: {total_bytes_sent} bytes as {download_name}")
-            print(f"  -> Time: {duration_secs:.2f} secs")
-            print(f"  -> Rate: {mbps:.2f} Mb/s")
-
-        return (counter % 99) + 1
+        total_bytes_sent, duration_secs = send_file_stream(conn, filename, stream_buffer)
+        return download_name, (counter % 99) + 1, total_bytes_sent, duration_secs
 
     except OSError as e:
         print("Error: Active webpage download interrupted mid-stream:", e)
-        return counter
+        return None, counter, 0, 0.0
 
 
 def disable_ap():
