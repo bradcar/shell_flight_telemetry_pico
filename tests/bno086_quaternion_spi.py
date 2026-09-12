@@ -43,4 +43,9 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\nCtrl-c exit\n")
+        bno.print_report_period()
+

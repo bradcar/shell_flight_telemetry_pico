@@ -40,9 +40,10 @@ print(f"Initial sea_level_pressure = {sea_level_pressure:.2f} hPa")
 
 # Alternatively set known altitude in meters and the sea level pressure will be calculated
 # https://www.weather.gov/wrh/timeseries?site=KPDX
-ALT = 104.851
-SARA_B_LINE_WPA_AZ = 299.923
-quality_inn = 161  # 2nd floor
+ALT = 101
+
+# SARA_B_LINE_WPA_AZ = 299.923
+# quality_inn = 161  # 2nd floor meters
 
 bmp.altitude = quality_inn
 print(f"Altitude {ALT}m = {bmp.altitude:.2f} meters")
@@ -52,7 +53,7 @@ print("---- loop ----")
 last_ts = ticks_us()
 last_pressure = bmp.pressure
 while True:
-    # Pressure in hPA measured at sensor, temperature in Celsius
+    # Pressure in hPA
     pressure = bmp.pressure
     now = ticks_us()
     if pressure != last_pressure:
@@ -60,21 +61,14 @@ while True:
         last_ts = now
         last_pressure = pressure
         pressure = bmp.pressure
-#        print(f"hPa = {pressure:.3f} hPa")
 
-# meters = bmp.altitude
-# print(f"Altitude = {meters:.3f} meters")
-
-# temp = bmp.temperature
-
-# print(f"Altitude = {meters:.3f} meters, temp = {temp:.2f} C")
-
-#         feet = meters * 3.28084
-#         print(f"Altitude = {int(feet)} feet {int((feet - int(feet))*12)} inches\n")
-
-#     temp = bmp.temperature
-#     print(f"temp = {temp:.2f} C")
-#
-#     # Altitude in meters and in feet/inches
-
-#    time.sleep(1.1)
+    # meters = bmp.altitude
+    # print(f"Altitude = {meters:.3f} meters")
+    #
+    # temp = bmp.temperature
+    # print(f"Altitude = {meters:.3f} meters, temp = {temp:.2f} C")
+    #
+    # feet = meters * 3.28084
+    # print(f"Altitude = {int(feet)} feet {int((feet - int(feet))*12)} inches\n")
+    #
+    # time.sleep(1.1)
