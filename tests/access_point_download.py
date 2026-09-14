@@ -156,7 +156,8 @@ def main():
     print("Initializing Pico's AP (Access Point) Download serving...")
     try:
         ssid = config.SSID_STRING
-        ip = ap_mode(ssid, config.PW_STRING)
+        channel = 11  # for Shell telemetry
+        ip = ap_mode(ssid, config.PW_STRING, channel)
 
         if ip is not None:
             print("\nAccess Point Mode is active, can log into network.\n")
