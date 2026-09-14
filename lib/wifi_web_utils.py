@@ -21,12 +21,16 @@ import os
 REQUEST_TIMEOUT = 0.4
 
 
-def ap_mode(ssid, password):
-    """Standard Wi-Fi Access Point setup routine."""
+def ap_mode(ssid, password, channel=11):
+    """
+    Standard Wi-Fi Access Point setup routine.
+
+    Default to channel 11
+    """
     gc.collect()
     ap = network.WLAN(network.AP_IF)
     ap.active(True)
-    ap.config(ssid=ssid, password=password)
+    ap.config(ssid=ssid, password=password, channel=channel)
 
     # Retry loop waiting for interface activation AND valid IP assignment
     deadline = time.ticks_add(time.ticks_ms(), 5000)  # 5 second timeout
@@ -41,6 +45,8 @@ def ap_mode(ssid, password):
 
     if not ap.active() or ip == "0.0.0.0":
         raise RuntimeError("Failed to activate Wi-Fi Access Point interface or assign IP.")
+
+    print(f"SSID: {ssid!r}, channel: {channel}")
 
     return ip
 
