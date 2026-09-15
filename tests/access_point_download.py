@@ -8,6 +8,7 @@ over a fast lightweight HTTP server.
 
 Network Configuration:
     - SSID          : shell-fi
+    - Channel       : 11
     - Password      : pyropyro
     - Hardware BSSID: 2C:CF:67:CA:83:3E
 
@@ -19,17 +20,17 @@ Server & Concurrency Architecture:
       file transfers.
 
 Major Functions:
-    - ap_mode(ssid, password):
+    - ap_mode(ssid, password, channel):
       Activates the Wi-Fi Access Point interface, checks link readiness with
       a timeout loop, and returns the IP address.
 
     - run_web_server(filename, stream_buffer):
       Main web server loop. Binds socket port 80. Accepts incoming TCP client connections,
       toggles the status LED during active requests.
-        * When a user types thr ip returnedf by ap_mode in their browser, it requests the root path (/).
-          The code routes this request to send_html_page(), which renders the web page with the "Download Binary Log" button.
+        * When a user types the ip returned by ap_mode in their browser, it requests the root path (/).
+          root path (/) or /index.html request start send_html_page(), which renders the page with "Download Binary Log" button.
         * When the user clicks the download button, the browser requests (ex: http://192.168.4.1/download)
-          The code identifies /download and routes it to handle_file_download(), which streams the .bin flight log file to their device.
+          The code handles /download and routes it to handle_file_download(), which streams the .bin flight log file to their device.
         * Browsers automatically ask for a website icon (favicon) every time they visit a page.
           The code catches /favicon.ico and immediately responds with 204 No Content to tell the browser
           "there is no icon" quickly and silently.
