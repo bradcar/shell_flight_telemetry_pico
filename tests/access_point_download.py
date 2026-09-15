@@ -118,11 +118,10 @@ def run_web_server(filename, stream_buffer):
                         pass
                     continue
                 if path == "/download":
-                    print(f"\nStarting download (#{download_counter}) from Client: {addr[0]}, {addr[1]}")
-                    download_name, download_counter, total_bytes_sent, duration_secs = handle_file_download(conn,
-                                                                                                            filename,
-                                                                                                            download_counter,
-                                                                                                            stream_buffer)
+                    print(f"\nStarting download (#{download_counter}) from Client: {addr[0]}, {addr[1]} .")
+                    download_name, download_counter, total_bytes_sent, duration_secs = handle_file_download(conn, filename,
+                                                                                             download_counter,
+                                                                                             stream_buffer)
 
                     if duration_secs > 0:
                         print("Download data transfer complete.")
@@ -156,8 +155,8 @@ def main():
     print("Initializing Pico's AP (Access Point) Download serving...")
     try:
         ssid = config.SSID_STRING
-        channel = 11  # for Shell telemetry
-        ip = ap_mode(ssid, config.PW_STRING, channel)
+        channel = config.SSID_CHANNEL
+        ip = ap_mode(ssid, config.PW_STRING, config.SSID_CHANNEL)
 
         if ip is not None:
             print("\nAccess Point Mode is active, can log into network.\n")

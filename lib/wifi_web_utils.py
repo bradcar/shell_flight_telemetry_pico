@@ -9,8 +9,6 @@ send_html_page - Formats and transmits standard HTTP headers along with HTML con
 get_download_filename - Formats the output download filename by appending a sequential version counter prior to the file extension.
 handle_file_download - downloads file, including 404 responses, header delivery, streaming, and throughput logging.
 disable_ap - Safely deactivates and powers down the active Wi-Fi Access Point interface.
-
-TODO replace prints with logging
 """
 import gc
 import network
@@ -22,11 +20,7 @@ REQUEST_TIMEOUT = 0.4
 
 
 def ap_mode(ssid, password, channel=11):
-    """
-    Standard Wi-Fi Access Point setup routine.
-
-    Default to channel 11
-    """
+    """Standard Wi-Fi Access Point setup routine."""
     gc.collect()
     ap = network.WLAN(network.AP_IF)
     ap.active(True)
@@ -45,8 +39,8 @@ def ap_mode(ssid, password, channel=11):
 
     if not ap.active() or ip == "0.0.0.0":
         raise RuntimeError("Failed to activate Wi-Fi Access Point interface or assign IP.")
-
-    print(f"SSID: {ssid!r}, channel: {channel}")
+    
+    print(f"ap_mode: SSID: {ssid!r}, channel: {channel}")
 
     return ip
 
